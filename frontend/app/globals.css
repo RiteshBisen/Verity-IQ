@@ -1,0 +1,222 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Material / Workspace Theme Tokens ────────────────────────────── */
+:root {
+  /* Google Light Surface & Color Variables */
+  --bg-primary: #F8F9FA;      /* Google Surface Background */
+  --text-primary: #202124;    /* Google Charcoal Text */
+  --border-primary: #DADCE0;  /* Google Light Border Gray */
+  --bg-card: #FFFFFF;         /* Solid White Cards */
+  --text-muted: #5F6368;      /* Google Muted Text Gray */
+  --shadow-color: rgba(60, 64, 67, 0.08); /* Soft Organic Material Shadow */
+  --accent-red: #EA4335;      /* Google Red */
+  --accent-blue: #4285F4;     /* Google Blue */
+  --accent-yellow: #FBBC05;   /* Google Yellow */
+  --accent-green: #34A853;    /* Google Green */
+  --accent-orange: #FA903D;   /* Google Orange */
+  --accent-purple: #A142F4;   /* Google Purple */
+  --bg-accent-light: #F1F3F4;  /* Google Input/Secondary Background */
+
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "DM Mono", monospace;
+}
+
+.dark {
+  /* Google Dark Surface & Color Variables */
+  --bg-primary: #1F1F1F;      /* Google Dark Mode Background */
+  --text-primary: #E3E3E3;    /* Google Light Text Gray */
+  --border-primary: #444746;  /* Google Dark Mode Border Gray */
+  --bg-card: #2B2B2B;         /* Google Dark Mode Card Surface */
+  --text-muted: #C4C7C5;      /* Google Dark Mode Muted Text */
+  --shadow-color: rgba(0, 0, 0, 0.25);
+  --accent-red: #F28B82;      /* Google Dark Mode Red */
+  --accent-blue: #8AB4F8;     /* Google Dark Mode Blue */
+  --accent-yellow: #FDD663;   /* Google Dark Mode Yellow */
+  --accent-green: #81C995;    /* Google Dark Mode Green */
+  --accent-orange: #FCAD70;   /* Google Dark Mode Orange */
+  --accent-purple: #C58AF9;   /* Google Dark Mode Purple */
+  --bg-accent-light: #303030;  /* Google Dark Mode Secondary Input Bg */
+}
+
+/* ─── Base Styles ─────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Modern Clean Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+/* ─── Custom Material Utilities ─────────────────────────────────────────────── */
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-custom {
+    font-family: var(--font-mono);
+  }
+
+  /* Material Outlines & Elevation Shadows (Overrides for Neubrutalist Aliases) */
+  .brutal-border {
+    border: 1px solid var(--border-primary);
+  }
+
+  .brutal-border-thick {
+    border: 1px solid var(--border-primary);
+  }
+
+  .brutal-shadow-sm {
+    box-shadow: 0 1px 2px 0 var(--shadow-color);
+  }
+
+  .brutal-shadow {
+    box-shadow: 0 4px 12px 0 var(--shadow-color);
+  }
+
+  .brutal-shadow-lg {
+    box-shadow: 0 12px 24px 0 var(--shadow-color);
+  }
+
+  /* Smooth Material Button Hover Transitions */
+  .brutal-btn {
+    transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .brutal-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px 0 var(--shadow-color);
+  }
+
+  .brutal-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px 0 var(--shadow-color);
+  }
+
+  /* Grid Line Overrides - Removed for Clean Modern Surface Canvas */
+  .brutal-grid-line {
+    background: none !important;
+    opacity: 0 !important;
+  }
+
+  /* Bauhaus Compatibility Mappings */
+  .bauhaus-border {
+    border: 1px solid var(--border-primary);
+  }
+
+  .bauhaus-border-thick {
+    border: 1px solid var(--border-primary);
+  }
+
+  .bauhaus-shadow {
+    box-shadow: 0 4px 12px 0 var(--shadow-color);
+  }
+
+  .bauhaus-shadow-sm {
+    box-shadow: 0 1px 2px 0 var(--shadow-color);
+  }
+
+  .bauhaus-shadow-lg {
+    box-shadow: 0 12px 24px 0 var(--shadow-color);
+  }
+
+  .bg-bauhaus-red {
+    background-color: var(--accent-red);
+  }
+
+  .bg-bauhaus-blue {
+    background-color: var(--accent-blue);
+  }
+
+  .bg-bauhaus-yellow {
+    background-color: var(--accent-yellow);
+  }
+
+  .bauhaus-btn-hover {
+    transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bauhaus-btn-hover:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px 0 var(--shadow-color);
+  }
+
+  .bauhaus-btn-hover:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px 0 var(--shadow-color);
+  }
+
+  .bauhaus-grid-line {
+    background: none !important;
+    opacity: 0 !important;
+  }
+
+  /* Gentle Floating Animations for Decorative Google Shapes */
+  @keyframes float-y-1 {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes float-y-2 {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-14px) rotate(4deg); }
+  }
+  @keyframes float-y-3 {
+    0%, 100% { transform: translateY(0) rotate(12deg); }
+    50% { transform: translateY(-12px) rotate(6deg); }
+  }
+  @keyframes float-y-4 {
+    0%, 100% { transform: translateY(0) rotate(12deg); }
+    50% { transform: translateY(-8px) rotate(16deg); }
+  }
+
+  .animate-float-1 {
+    animation: float-y-1 6s ease-in-out infinite;
+  }
+  .animate-float-2 {
+    animation: float-y-2 5s ease-in-out infinite;
+  }
+  .animate-float-3 {
+    animation: float-y-3 7s ease-in-out infinite;
+  }
+  .animate-float-4 {
+    animation: float-y-4 5.5s ease-in-out infinite;
+  }
+}
