@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const res = await fetch("http://127.0.0.1:8000/api/health");
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const res = await fetch(`${backendUrl}/api/health`);
     if (!res.ok) {
       return NextResponse.json({ error: "Backend unhealthy" }, { status: res.status });
     }

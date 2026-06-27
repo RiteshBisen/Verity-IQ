@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const res = await fetch("http://127.0.0.1:8000/api/generate", {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const res = await fetch(`${backendUrl}/api/generate`, {
       method: "POST",
       body: formData,
     });
