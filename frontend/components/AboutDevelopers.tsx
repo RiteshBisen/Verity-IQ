@@ -61,14 +61,14 @@ export default function AboutDevelopers({ onClose }: AboutDevelopersProps) {
             <div className="space-y-4 text-sm font-medium">
               <div>
                 <p className="text-xs text-muted font-semibold uppercase tracking-wider">
-                  Lead Engineering
+                  Founder
                 </p>
                 <p className="text-base font-semibold mt-1 text-foreground">Ritesh Bisen</p>
                 <p className="text-xs text-muted">Fullstack & Architecture</p>
               </div>
               <div className="pt-3 border-t border-border/40">
                 <p className="text-xs text-muted font-semibold uppercase tracking-wider">
-                  AI Partner
+                  Dev Co-Pilot
                 </p>
                 <p className="text-base font-semibold mt-1 text-brutal-red">Antigravity AI</p>
                 <p className="text-xs text-muted">Advanced Google DeepMind Agent</p>
