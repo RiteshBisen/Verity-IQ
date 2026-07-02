@@ -11,6 +11,9 @@ import urllib.request
 import base64
 import json
 from typing import List, Optional
+from dotenv import load_dotenv
+import os
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 try:
     if hasattr(sys.stdout, "reconfigure"):
@@ -24,12 +27,10 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from dotenv import load_dotenv
-
 from google import genai
 from google.genai import types
 
-load_dotenv()
+
 
 # ─── App Init ───────────────────────────────────────────────────────────────
 
@@ -55,9 +56,12 @@ app.add_middleware(
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY environment variable is not set.")
-
-client = genai.Client(api_key=GOOGLE_API_KEY)
+    # If the key is missing, we run in a limited mode where Gemini features are disabled.
+    import warnings
+    warnings.warn("GOOGLE_API_KEY not set – Gemini AI functionality will be disabled.")
+    client = None
+else:
+    client = genai.Client(api_key=GOOGLE_API_KEY)
 
 MODEL_ID = "gemini-2.5-flash"
 
@@ -760,7 +764,8 @@ def _send_resend_email_blocking(
     url = "https://api.resend.com/emails"
     headers = {
         "Authorization": f"Bearer {resend_api_key}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "VerityIQ-Backend/1.0"
     }
 
     # Resend requires a verified domain or uses onboarding@resend.dev in sandbox mode.
@@ -784,9 +789,18 @@ def _send_resend_email_blocking(
         method="POST"
     )
 
-    with urllib.request.urlopen(req_obj, timeout=10) as resp:
-        resp_data = json.loads(resp.read().decode('utf-8'))
-        print(f"[INFO] Resend email sent successfully, id: {resp_data.get('id')}")
+    import urllib.error
+    try:
+        with urllib.request.urlopen(req_obj, timeout=10) as resp:
+            resp_data = json.loads(resp.read().decode('utf-8'))
+            print(f"[INFO] Resend email sent successfully, id: {resp_data.get('id')}")
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode('utf-8')
+            print(f"[ERROR] Resend HTTPError: {e.code} - {err_body}")
+            raise Exception(f"Resend API returned {e.code}: {err_body}")
+        except Exception as inner_e:
+            raise Exception(f"Resend API returned {e.code} (failed to read body: {inner_e})") from e
 
 
 @app.post("/api/contact", response_model=ContactResponse, tags=["Support"])
