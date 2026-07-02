@@ -656,28 +656,7 @@ class ContactResponse(BaseModel):
 
 
 # ─── Contact Endpoint ────────────────────────────────────────────────────────
-def _send_smtp_email_blocking(
-    smtp_host: str,
-    smtp_port: int,
-    smtp_user: str,
-    smtp_password: str,
-    support_email: str,
-    name: str,
-    user_email: str,
-    category: str,
-    subject: Optional[str],
-    message_body: str
-):
-    import smtplib
-    from email.message import EmailMessage
-
-    msg = EmailMessage()
-    email_subject = f"[{category}] {subject or 'New Support Message'} from {name}"
-    msg["Subject"] = email_subject
-    msg["From"] = smtp_user
-    msg["To"] = support_email
-    msg.add_header("Reply-To", user_email)
-
+def _get_email_templates(name: str, user_email: str, category: str, subject: Optional[str], message_body: str):
     text_content = (
         f"New Contact Form Submission\n"
         f"===========================\n\n"
@@ -688,8 +667,7 @@ def _send_smtp_email_blocking(
         f"--------\n"
         f"{message_body}\n"
     )
-    msg.set_content(text_content)
-
+    
     html_content = f"""
     <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #202124; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #dadce0; border-radius: 8px;">
@@ -721,6 +699,34 @@ def _send_smtp_email_blocking(
       </body>
     </html>
     """
+    return text_content, html_content
+
+
+def _send_smtp_email_blocking(
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_password: str,
+    support_email: str,
+    name: str,
+    user_email: str,
+    category: str,
+    subject: Optional[str],
+    message_body: str,
+    text_content: str,
+    html_content: str
+):
+    import smtplib
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    email_subject = f"[{category}] {subject or 'New Support Message'} from {name}"
+    msg["Subject"] = email_subject
+    msg["From"] = smtp_user
+    msg["To"] = support_email
+    msg.add_header("Reply-To", user_email)
+
+    msg.set_content(text_content)
     msg.add_alternative(html_content, subtype="html")
 
     if smtp_port == 465:
@@ -738,29 +744,76 @@ def _send_smtp_email_blocking(
         server.quit()
 
 
+def _send_resend_email_blocking(
+    resend_api_key: str,
+    support_email: str,
+    name: str,
+    user_email: str,
+    category: str,
+    subject: Optional[str],
+    text_content: str,
+    html_content: str
+):
+    import urllib.request
+    import json
+
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {resend_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    # Resend requires a verified domain or uses onboarding@resend.dev in sandbox mode.
+    # We allow defining a custom sender in the environment (e.g. RESEND_FROM_EMAIL).
+    # If not set, we default to "Verity IQ Support <onboarding@resend.dev>"
+    from_email = os.getenv("RESEND_FROM_EMAIL", "") or "Verity IQ Support <onboarding@resend.dev>"
+
+    payload = {
+        "from": from_email,
+        "to": [support_email],
+        "reply_to": user_email,
+        "subject": f"[{category}] {subject or 'New Support Message'} from {name}",
+        "html": html_content,
+        "text": text_content
+    }
+
+    req_obj = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        headers=headers,
+        method="POST"
+    )
+
+    with urllib.request.urlopen(req_obj, timeout=10) as resp:
+        resp_data = json.loads(resp.read().decode('utf-8'))
+        print(f"[INFO] Resend email sent successfully, id: {resp_data.get('id')}")
+
+
 @app.post("/api/contact", response_model=ContactResponse, tags=["Support"])
 async def send_contact_message(request: ContactRequest):
     """
-    Forwards a contact form submission to the official support email via SMTP.
-    Falls back to console/terminal mock logging if SMTP credentials are not configured.
+    Forwards a contact form submission to the official support email via SMTP or Resend API.
+    Falls back to console/terminal mock logging if credentials are not configured.
     """
+    resend_api_key = os.getenv("RESEND_API_KEY", "")
     smtp_host = os.getenv("SMTP_HOST", "")
     smtp_port_str = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER", "")
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     support_email = os.getenv("SUPPORT_EMAIL", "") or smtp_user or "support@verityiq.edu"
 
-    try:
-        smtp_port = int(smtp_port_str)
-    except ValueError:
-        smtp_port = 587
+    # Pre-generate templates
+    text_content, html_content = _get_email_templates(
+        request.name, request.email, request.category, request.subject, request.message
+    )
 
+    is_resend_configured = bool(resend_api_key)
     is_smtp_configured = bool(smtp_host and smtp_user and smtp_password)
 
-    if not is_smtp_configured:
+    if not is_resend_configured and not is_smtp_configured:
         try:
             print("\n" + "=" * 50)
-            print("📥 [NEW CONTACT FORM SUBMISSION - MOCK MODE (SMTP Not Configured)]")
+            print("📥 [NEW CONTACT FORM SUBMISSION - MOCK MODE (Email Service Not Configured)]")
             print("-" * 50)
             print(f"Forwarded To: {support_email}")
             print(f"From:         {request.name} <{request.email}>")
@@ -783,7 +836,40 @@ async def send_contact_message(request: ContactRequest):
                 detail=f"Failed to submit message: {str(e)}"
             )
 
+    # 1. Prefer Resend API if configured (avoids port blocks on Render/etc.)
+    if is_resend_configured:
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                _send_resend_email_blocking,
+                resend_api_key,
+                support_email,
+                request.name,
+                request.email,
+                request.category,
+                request.subject,
+                text_content,
+                html_content
+            )
+            return ContactResponse(
+                status="success",
+                message="We've received your message and will get back to you as soon as possible."
+            )
+        except Exception as e:
+            print(f"[ERROR] Resend email dispatch failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send email message via Resend API: {str(e)}"
+            )
+
+    # 2. Fallback to SMTP
     try:
+        try:
+            smtp_port = int(smtp_port_str)
+        except ValueError:
+            smtp_port = 587
+
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
@@ -797,7 +883,9 @@ async def send_contact_message(request: ContactRequest):
             request.email,
             request.category,
             request.subject,
-            request.message
+            request.message,
+            text_content,
+            html_content
         )
         return ContactResponse(
             status="success",
@@ -805,7 +893,12 @@ async def send_contact_message(request: ContactRequest):
         )
     except Exception as e:
         print(f"[ERROR] SMTP email dispatch failed: {e}")
+        # Add informative messaging about Render's port blocks
+        error_msg = str(e)
+        if "timeout" in error_msg.lower() or "connection refused" in error_msg.lower() or "connection timed out" in error_msg.lower():
+            print("[TIP] If hosting on Render's Free tier, SMTP ports 25/465/587 are blocked. Consider setting RESEND_API_KEY in environment variables to send via HTTP.")
+            error_msg += " (Note: SMTP ports may be blocked by your hosting provider. Consider configuring Resend API key instead.)"
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send email message: {str(e)}"
+            detail=f"Failed to send email message via SMTP: {error_msg}"
         )
