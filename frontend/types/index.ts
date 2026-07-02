@@ -91,3 +91,40 @@ export interface TutorRequest {
 export interface TutorResponse {
   reply: string;
 }
+
+// ─── Support (Razorpay) Types ───────────────────────────────────────────────
+
+export interface SupportOrderResponse {
+  order_id: string;
+  amount: number;
+  currency: string;
+  key_id: string;
+  is_mock: boolean;
+}
+
+export interface SupportVerifyResponse {
+  status: string;
+  message: string;
+}
+
+export interface SupportMetrics {
+  total_chais_funded: number;
+  total_supporters: number;
+  total_amount_raised: number;
+}
+
+export interface ContactRequest {
+  name: string;
+  email: string;
+  category: string;
+  subject?: string;
+  message: string;
+}
+
+export interface ContactResponse {
+  status: string;
+  message: string;
+}
+
+
+

@@ -11,6 +11,9 @@ import ProcessingView from "@/components/ProcessingView";
 import QuizView from "@/components/QuizView";
 import ResultsView from "@/components/ResultsView";
 import AboutDevelopers from "@/components/AboutDevelopers";
+import SupportModal from "@/components/SupportModal";
+import CommunityMetrics from "@/components/CommunityMetrics";
+import ContactForm from "@/components/ContactForm";
 
 import { generateAssessment, ApiError } from "@/services/api";
 import { Question, QuizResult, AppState, ProcessingStep, AssessmentType } from "@/types";
@@ -33,6 +36,7 @@ export default function HomePage() {
   // Theme and Section states
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [showAbout, setShowAbout] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   // Sync theme with document class on mount & changes
   useEffect(() => {
@@ -416,6 +420,32 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Support Us Banner */}
+                  <div className="w-full border border-border bg-card p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-brutal-red/10 text-brutal-red rounded-full flex items-center justify-center shrink-0">
+                        <span className="text-lg">❤️</span>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs sm:text-sm font-medium text-foreground">
+                          Enjoying Verity IQ? Help us keep it free and caffeinated by buying us a cup of chai!
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowSupportModal(true)}
+                      className="font-bold text-xs px-5 py-2.5 bg-brutal-red text-white rounded-full hover:bg-brutal-red/90 active:scale-95 transition-all shadow-sm cursor-pointer shrink-0 flex items-center gap-1.5"
+                    >
+                      Support Us ❤️
+                    </button>
+                  </div>
+
+                  {/* Community Support Metrics */}
+                  <CommunityMetrics />
+
+                  {/* Contact Us Form */}
+                  <ContactForm />
                 </motion.div>
               )}
 
@@ -489,6 +519,13 @@ export default function HomePage() {
           Verity IQ · Education Framework · Powered by Google Gemini AI
         </p>
       </footer>
+
+      {/* Support Us Modal Overlay */}
+      <AnimatePresence>
+        {showSupportModal && (
+          <SupportModal onClose={() => setShowSupportModal(false)} />
+        )}
+      </AnimatePresence>
     </main>
   );
 }

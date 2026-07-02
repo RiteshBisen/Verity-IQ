@@ -1,10 +1,24 @@
 import os
 import io
+import sys
 import uuid
 import asyncio
 import time
 import re
-from typing import List
+import hmac
+import hashlib
+import urllib.request
+import base64
+import json
+from typing import List, Optional
+
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -464,4 +478,334 @@ async def evaluate_subjective_answers(request: SubjectiveEvaluationRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Subjective evaluation failed: {str(e)}",
+        )
+
+
+# ─── Support (Razorpay) Data Models ──────────────────────────────────────────
+
+class SupportOrderRequest(BaseModel):
+    amount: float = Field(..., description="Amount in INR, e.g. 20.00")
+
+class SupportOrderResponse(BaseModel):
+    order_id: Optional[str] = None
+    amount: int = 0
+    currency: str = "INR"
+    key_id: Optional[str] = None
+    is_mock: bool = False
+
+class SupportVerifyRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+
+class SupportVerifyResponse(BaseModel):
+    status: str
+    message: str
+
+
+# ─── Support (Razorpay) Endpoints ───────────────────────────────────────────
+
+@app.post("/api/support/order", response_model=SupportOrderResponse, tags=["Support"])
+async def create_support_order(request: SupportOrderRequest):
+    key_id = os.getenv("RAZORPAY_KEY_ID")
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+
+    # If keys are missing, run in mock mode
+    if not key_id or not key_secret or key_id.startswith("your_") or key_secret.startswith("your_"):
+        print("[INFO] Razorpay keys not configured. Falling back to Mock Payment Mode.")
+        return SupportOrderResponse(
+            order_id=f"order_mock_{uuid.uuid4().hex[:12]}",
+            amount=int(request.amount * 100),
+            currency="INR",
+            key_id="rzp_test_mockkeyid12345",
+            is_mock=True
+        )
+
+    try:
+        # Razorpay expects amount in paise (integers)
+        amount_in_paise = int(request.amount * 100)
+        
+        # Base64 encode basic auth credentials
+        auth_str = f"{key_id}:{key_secret}"
+        auth_bytes = auth_str.encode('utf-8')
+        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+
+        headers = {
+            "Authorization": f"Basic {auth_b64}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "receipt": f"receipt_support_{int(time.time())}"
+        }
+        
+        # Call Razorpay Orders API
+        def call_razorpay():
+            req_obj = urllib.request.Request(
+                "https://api.razorpay.com/v1/orders",
+                data=json.dumps(payload).encode('utf-8'),
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(req_obj, timeout=10) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, call_razorpay)
+        
+        return SupportOrderResponse(
+            order_id=result["id"],
+            amount=result["amount"],
+            currency=result["currency"],
+            key_id=key_id,
+            is_mock=False
+        )
+    except Exception as e:
+        print(f"[ERROR] Razorpay order creation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initiate payment order: {str(e)}"
+        )
+
+
+@app.post("/api/support/verify", response_model=SupportVerifyResponse, tags=["Support"])
+async def verify_support_payment(request: SupportVerifyRequest):
+    # Handle mock order verification
+    if request.razorpay_order_id.startswith("order_mock_"):
+        return SupportVerifyResponse(
+            status="success",
+            message="Mock signature verified successfully."
+        )
+
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+    if not key_secret:
+        raise HTTPException(
+            status_code=500,
+            detail="Razorpay configuration missing on server."
+        )
+
+    try:
+        # Construct message: order_id | payment_id
+        message = f"{request.razorpay_order_id}|{request.razorpay_payment_id}"
+        
+        # Verify HMAC SHA256 signature
+        generated_signature = hmac.new(
+            key_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        if generated_signature == request.razorpay_signature:
+            return SupportVerifyResponse(
+                status="success",
+                message="Payment verified successfully."
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid signature. Verification failed."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Razorpay verification failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Verification failed: {str(e)}"
+        )
+
+
+# ─── Support Metrics Models ──────────────────────────────────────────────────
+
+class SupportMetricsResponse(BaseModel):
+    total_chais_funded: int
+    total_supporters: int
+    total_amount_raised: int
+
+
+# ─── Support Metrics Constants ──────────────────────────────────────────────
+# Modify these metrics directly or via environment variables:
+SUPPORT_METRICS = {
+    "total_chais_funded": int(os.getenv("SUPPORT_TOTAL_CHAIS", "0")),
+    "total_supporters": int(os.getenv("SUPPORT_TOTAL_SUPPORTERS", "0")),
+    "total_amount_raised": int(os.getenv("SUPPORT_TOTAL_AMOUNT", "0")),
+}
+
+
+# ─── Support Metrics Endpoints ───────────────────────────────────────────────
+
+@app.get("/api/support/metrics", response_model=SupportMetricsResponse, tags=["Support"])
+async def get_support_metrics():
+    return SupportMetricsResponse(**SUPPORT_METRICS)
+
+
+# ─── Contact Support Models ──────────────────────────────────────────────────
+
+class ContactRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    email: str = Field(..., min_length=3)
+    category: str = Field(..., min_length=1)
+    subject: Optional[str] = None
+    message: str = Field(..., min_length=1)
+
+class ContactResponse(BaseModel):
+    status: str
+    message: str
+
+
+# ─── Contact Endpoint ────────────────────────────────────────────────────────
+def _send_smtp_email_blocking(
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_password: str,
+    support_email: str,
+    name: str,
+    user_email: str,
+    category: str,
+    subject: Optional[str],
+    message_body: str
+):
+    import smtplib
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    email_subject = f"[{category}] {subject or 'New Support Message'} from {name}"
+    msg["Subject"] = email_subject
+    msg["From"] = smtp_user
+    msg["To"] = support_email
+    msg.add_header("Reply-To", user_email)
+
+    text_content = (
+        f"New Contact Form Submission\n"
+        f"===========================\n\n"
+        f"From:     {name} <{user_email}>\n"
+        f"Category: {category}\n"
+        f"Subject:  {subject or 'N/A'}\n\n"
+        f"Message:\n"
+        f"--------\n"
+        f"{message_body}\n"
+    )
+    msg.set_content(text_content)
+
+    html_content = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #202124; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #dadce0; border-radius: 8px;">
+        <h2 style="color: #4285F4; border-bottom: 2px solid #f1f3f4; padding-bottom: 10px; margin-top: 0;">
+          📥 New Support Message
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 120px;">From:</td>
+            <td style="padding: 6px 0;">{name} (&lt;<a href="mailto:{user_email}">{user_email}</a>&gt;)</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Category:</td>
+            <td style="padding: 6px 0;"><span style="background-color: #f1f3f4; padding: 3px 8px; border-radius: 12px; font-size: 13px;">{category}</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Subject:</td>
+            <td style="padding: 6px 0;">{subject or 'N/A'}</td>
+          </tr>
+        </table>
+        <div style="background-color: #f8f9fa; border-left: 4px solid #4285F4; padding: 15px; border-radius: 4px; margin-top: 20px;">
+          <h4 style="margin: 0 0 10px 0; color: #5f6368;">Message:</h4>
+          <p style="margin: 0; white-space: pre-wrap;">{message_body}</p>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #dadce0; margin: 25px 0 15px 0;" />
+        <p style="font-size: 11px; color: #5f6368; text-align: center; margin: 0;">
+          Sent automatically by Verity IQ Support Portal
+        </p>
+      </body>
+    </html>
+    """
+    msg.add_alternative(html_content, subtype="html")
+
+    if smtp_port == 465:
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10)
+    else:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+
+    try:
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+    finally:
+        server.quit()
+
+
+@app.post("/api/contact", response_model=ContactResponse, tags=["Support"])
+async def send_contact_message(request: ContactRequest):
+    """
+    Forwards a contact form submission to the official support email via SMTP.
+    Falls back to console/terminal mock logging if SMTP credentials are not configured.
+    """
+    smtp_host = os.getenv("SMTP_HOST", "")
+    smtp_port_str = os.getenv("SMTP_PORT", "587")
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    support_email = os.getenv("SUPPORT_EMAIL", "") or smtp_user or "support@verityiq.edu"
+
+    try:
+        smtp_port = int(smtp_port_str)
+    except ValueError:
+        smtp_port = 587
+
+    is_smtp_configured = bool(smtp_host and smtp_user and smtp_password)
+
+    if not is_smtp_configured:
+        try:
+            print("\n" + "=" * 50)
+            print("📥 [NEW CONTACT FORM SUBMISSION - MOCK MODE (SMTP Not Configured)]")
+            print("-" * 50)
+            print(f"Forwarded To: {support_email}")
+            print(f"From:         {request.name} <{request.email}>")
+            print(f"Category:     {request.category}")
+            print(f"Subject:      {request.subject or 'N/A'}")
+            print("-" * 50)
+            print("Message:")
+            print(request.message)
+            print("=" * 50 + "\n")
+            
+            await asyncio.sleep(0.5)
+            return ContactResponse(
+                status="success",
+                message="We've received your message (Mock Mode) and will get back to you soon."
+            )
+        except Exception as e:
+            print(f"[ERROR] Mock contact form log failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to submit message: {str(e)}"
+            )
+
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            _send_smtp_email_blocking,
+            smtp_host,
+            smtp_port,
+            smtp_user,
+            smtp_password,
+            support_email,
+            request.name,
+            request.email,
+            request.category,
+            request.subject,
+            request.message
+        )
+        return ContactResponse(
+            status="success",
+            message="We've received your message and will get back to you as soon as possible."
+        )
+    except Exception as e:
+        print(f"[ERROR] SMTP email dispatch failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email message: {str(e)}"
         )
