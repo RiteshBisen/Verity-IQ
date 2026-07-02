@@ -23,7 +23,7 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -641,7 +641,8 @@ SUPPORT_METRICS = {
 # ─── Support Metrics Endpoints ───────────────────────────────────────────────
 
 @app.get("/api/support/metrics", response_model=SupportMetricsResponse, tags=["Support"])
-async def get_support_metrics():
+async def get_support_metrics(response: Response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return SupportMetricsResponse(**SUPPORT_METRICS)
 
 
