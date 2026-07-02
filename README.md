@@ -38,6 +38,9 @@
 - **Interactive Quiz UI** — One-by-one card view with animated Framer Motion transitions
 - **Instant Feedback** — Green/Red highlighting with explanations revealed on answer
 - **Results Dashboard** — Score, grade, time taken, and per-question review
+- **Contact Support Form** — Direct messaging to developers with instant validation and a floating emoji success screen
+- **SMTP Support Integration** — Real email forwarding to support mailboxes with mock backup logging
+- **Community Milestones** — Counter-animated tracker showing donations, chais funded, and supporter stats
 - **Dark Mode SaaS Design** — Glassmorphism, subtle grain, Outfit + DM Mono fonts
 - **Mobile-first** — Fully responsive for student devices
 
@@ -62,7 +65,10 @@ mcq-generator/
     │   ├── ProcessingView.tsx  # Animated 3-step progress indicator
     │   ├── QuizView.tsx        # AnimatePresence card transitions
     │   ├── QuizCard.tsx        # Option selection + feedback + explanation
-    │   └── ResultsView.tsx     # Score, grade, stats, question review
+    │   ├── ResultsView.tsx     # Score, grade, stats, question review
+    │   ├── ContactForm.tsx     # Contact support form with validation
+    │   ├── CommunityMetrics.tsx# Animated support tracking benchmarks
+    │   └── SupportModal.tsx    # Payment simulation and coffee support modal
     ├── services/
     │   └── api.ts              # FormData fetch → FastAPI, error handling
     ├── types/
@@ -154,6 +160,33 @@ Frontend runs at: **http://localhost:3000**
 ---
 
 ## 🔌 API Reference
+
+### `POST /api/contact`
+
+Submits a message from the contact form to the support mailbox via SMTP or logs to console in Mock Mode.
+
+**Request**
+```
+Content-Type: application/json
+Body:
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "category": "Bug Report",
+  "subject": "Optional subject text",
+  "message": "Detailed message text"
+}
+```
+
+**Response `200 OK`**
+```json
+{
+  "status": "success",
+  "message": "We've received your message and will get back to you as soon as possible."
+}
+```
+
+---
 
 ### `POST /api/generate`
 
@@ -250,6 +283,11 @@ Uploading Document  →  Gemini is Reading  →  Generating Questions  →  [Qui
 |----------|----------|---------|-------------|
 | `GOOGLE_API_KEY` | ✅ Yes | — | Your Gemini API key |
 | `FRONTEND_URL` | No | `http://localhost:3000` | CORS origin |
+| `SMTP_HOST` | No | — | SMTP mail server hostname (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | No | `587` | SMTP mail server port (e.g., `587` or `465`) |
+| `SMTP_USER` | No | — | SMTP username / login account address |
+| `SMTP_PASSWORD` | No | — | SMTP account app password / credentials |
+| `SUPPORT_EMAIL` | No | — | Support mailbox recipient email address |
 
 ### Frontend (`frontend/.env.local`)
 
